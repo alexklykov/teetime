@@ -2,8 +2,9 @@
 """
 Teesnap (e.g. Loomis Trail -- https://golfloomis.teesnap.net/).
 
-Clean unauthenticated JSON API, no login:
-  GET {base}/customer-api/teetimes-day?course={courseId}&date=YYYY-MM-DD&players=0&holes=18&addons=off
+Public JSON API used by the booking site's current application, no login:
+  GET https://{course}.api.teesnap.net/api/bookingsite/teetimes-day
+      ?course={courseId}&date=YYYY-MM-DD&players=0&holes=18&addons=off
 
 The `players`/`holes` params don't filter, so availability is computed from the
 response itself: 4 (a foursome) minus golfers already booked into the slot, or 0
@@ -31,8 +32,9 @@ def _base(course):
 
 
 def _fetch_day(base, course_id, d):
+    api_base = base.replace(".teesnap.net", ".api.teesnap.net")
     resp = get(
-        f"{base}/customer-api/teetimes-day",
+        f"{api_base}/api/bookingsite/teetimes-day",
         params={"course": course_id, "date": d.isoformat(),
                 "players": 0, "holes": 18, "addons": "off"},
         headers={**HEADERS, "Referer": f"{base}/"},

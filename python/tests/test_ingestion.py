@@ -11,7 +11,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import ingest
 import pipeline
 from scrapers import chronogolf, cps, foreup, golfrev, teesnap
-from scrapers.common import ScrapeResult, collect_days, get
+from scrapers.common import ProviderError, ScrapeResult, collect_days, get
 import requests
 
 
@@ -99,6 +99,7 @@ class DailyResultsTests(unittest.TestCase):
 
     def test_cps_retries_a_timeout_and_continues_to_the_next_day(self):
         page = MagicMock()
+        page.url = "https://example.invalid/search-teetime"
         page.locator.return_value.filter.return_value.count.return_value = 1
         response = page.expect_response.return_value.__enter__.return_value.value
         response.status = 200
@@ -112,6 +113,7 @@ class DailyResultsTests(unittest.TestCase):
 
     def test_cps_parse_failure_preserves_that_day_but_processes_the_next(self):
         page = MagicMock()
+        page.url = "https://example.invalid/search-teetime"
         page.locator.return_value.filter.return_value.count.return_value = 1
         response = page.expect_response.return_value.__enter__.return_value.value
         response.status = 200
@@ -123,12 +125,30 @@ class DailyResultsTests(unittest.TestCase):
 
     def test_cps_explicitly_disabled_date_is_successful_empty_day(self):
         page = MagicMock()
+        page.url = "https://example.invalid/search-teetime"
         page.locator.return_value.filter.return_value.count.side_effect = [0, 1]
         with patch("scrapers.cps._open_widget", return_value=DAY.replace(day=1)):
             result = cps._read_days(page, "https://example.invalid", DAY, 1)
         self.assertEqual(result.successful_dates, {TODAY})
         self.assertEqual(result.rows, [])
         self.assertFalse(result.errors)
+
+    def test_cps_access_restriction_is_reported_without_bypass_attempts(self):
+        page = MagicMock()
+        page.url = "https://example.invalid/bot-detection"
+        with self.assertRaisesRegex(ProviderError, "refuses access"):
+            cps._request_teetimes(page, lambda: None)
+        page.reload.assert_not_called()
+
+    def test_cps_timeout_diagnostics_do_not_print_url_secrets(self):
+        page = MagicMock()
+        page.url = "https://example.invalid/search-teetime?token=private-value"
+        page.expect_response.return_value.__enter__.side_effect = cps.PWTimeoutError("private-value")
+        output = io.StringIO()
+        with contextlib.redirect_stderr(output), self.assertRaises(cps.PWTimeoutError):
+            cps._request_teetimes(page, lambda: None)
+        self.assertIn("request was not started", output.getvalue())
+        self.assertNotIn("private-value", output.getvalue())
 
 
 class SnapshotTests(unittest.TestCase):
@@ -222,6 +242,8 @@ class IngestTests(unittest.TestCase):
              patch("scrapers.cps.pipeline.save_session") as save, \
              patch("scrapers.cps.is_logged_out", return_value=False), \
              patch("scrapers.cps._read_days", return_value=ScrapeResult()):
+            browser = playwright.return_value.__enter__.return_value.chromium.launch.return_value
+            browser.new_context.return_value.new_page.return_value.url = course["bookingUrl"]
             cps.scrape(course, DAY, 1, MagicMock(), persist_session=False)
         save.assert_not_called()
         browser = playwright.return_value.__enter__.return_value.chromium.launch.return_value

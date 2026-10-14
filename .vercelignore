@@ -1,6 +1,5 @@
-.env*
-.release
-python
-.github
-db
-README.md
+/.env*
+/.release/
+/python/
+/.github/
+/README.md

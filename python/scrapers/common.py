@@ -8,6 +8,10 @@ from datetime import timedelta
 import requests
 
 
+class ProviderError(Exception):
+    """A deliberately safe operational message, never a raw provider response."""
+
+
 @dataclass
 class ScrapeResult:
     rows: list[dict] = field(default_factory=list)
@@ -28,6 +32,8 @@ class ScrapeResult:
 def error_message(exc):
     # Provider errors can contain request URLs, cookies or login field values.
     # Keep operational errors useful without persisting those secrets in logs/DB.
+    if isinstance(exc, ProviderError):
+        return str(exc)
     if isinstance(exc, requests.HTTPError) and exc.response is not None:
         return f"Provider returned HTTP {exc.response.status_code}"
     if isinstance(exc, requests.Timeout):

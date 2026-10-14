@@ -31,7 +31,7 @@ from playwright.sync_api import (
 )
 
 import pipeline
-from scrapers.common import ScrapeResult, error_message
+from scrapers.common import ProviderError, ScrapeResult, error_message
 
 TEETIMES_URL_PART = "/TeeTimes"
 DAY_CELL_SELECTOR = (
@@ -66,6 +66,22 @@ def is_logged_out(page):
         return False
 
 
+def _page_state(page):
+    path = urlsplit(page.url).path.lower()
+    if "bot-detection" in path or "access-denied" in path:
+        return "provider access restriction"
+    if "login" in path or "verify-email" in path:
+        return "login page"
+    if "search-teetime" in path:
+        return "tee-time search page"
+    return "unexpected page"
+
+
+def _check_access(page):
+    if _page_state(page) == "provider access restriction":
+        raise ProviderError("CPS refuses access from this runner; a permitted provider integration is required")
+
+
 def login(page, base, email, password):
     """
     Two-step login: /auth/verify-email (email -> Enter) then /auth/login
@@ -74,6 +90,7 @@ def login(page, base, email, password):
     a form "SIGN IN" button. Run cps_login.py --headed if this ever breaks.
     """
     page.goto(f"{base}/onlineresweb/login", wait_until="domcontentloaded")
+    _check_access(page)
 
     page.fill('input[name="email"]', email)
     page.locator('input[name="email"]').press("Enter")
@@ -91,7 +108,8 @@ def login(page, base, email, password):
     try:
         page.wait_for_url(re.compile(r"search-teetime|home|dashboard"), timeout=15000)
     except PWTimeoutError:
-        pass  # confirm via the gate instead
+        return False
+    _check_access(page)
     return not is_logged_out(page)
 
 
@@ -139,15 +157,23 @@ def _request_teetimes(page, action, timeout=15000):
             return True
         return False
 
-    with page.expect_request(capture, timeout=timeout):
-        with page.expect_response(
-            lambda response: bool(requests) and response.request == requests[0],
-            timeout=timeout,
-        ) as info:
-            action()
+    try:
+        with page.expect_request(capture, timeout=timeout):
+            with page.expect_response(
+                lambda response: bool(requests) and response.request == requests[0],
+                timeout=timeout,
+            ) as info:
+                action()
+                _check_access(page)
+    except PWTimeoutError:
+        _check_access(page)
+        # Static labels only: never log URLs, request bodies, cookies or fields.
+        stage = "response did not arrive" if requests else "request was not started"
+        print(f"  CPS: tee-time API {stage} ({_page_state(page)})", file=sys.stderr)
+        raise
     response = info.value
     if response.status != 200:
-        raise PWError("CPS availability request was unsuccessful")
+        raise ProviderError(f"CPS availability API returned HTTP {response.status}")
     return response.json()
 
 
@@ -160,9 +186,14 @@ def _open_widget(page, widget):
             break
         except PWError:
             if attempt == 1:
-                raise
+                raise ProviderError(
+                    f"CPS initial tee-time API did not load ({_page_state(page)})"
+                ) from None
             page.wait_for_timeout(1000)
-    page.wait_for_selector(MONTH_HEADER_SELECTOR, timeout=15000)
+    try:
+        page.wait_for_selector(MONTH_HEADER_SELECTOR, timeout=15000)
+    except PWTimeoutError:
+        raise ProviderError("CPS API responded but the booking calendar did not appear") from None
     header = page.locator(MONTH_HEADER_SELECTOR).inner_text().strip()
     return datetime.strptime(header, "%B %Y").date().replace(day=1)
 
@@ -231,20 +262,25 @@ def scrape(course, start, days, conn, headless=False, *, persist_session=True):
                 **({"storage_state": state} if state else {})
             )
             page = context.new_page()
-            page.goto(widget, wait_until="domcontentloaded")
+            try:
+                page.goto(widget, wait_until="domcontentloaded")
+            except PWTimeoutError:
+                _check_access(page)
+                raise ProviderError("CPS booking page did not load") from None
             page.wait_for_timeout(2000)  # let the Angular app decide login vs widget
+            _check_access(page)
 
             if needs_login and is_logged_out(page):
                 email, password = os.environ.get(EMAIL_ENV), os.environ.get(PASSWORD_ENV)
                 if not (email and password):
-                    raise RuntimeError(
+                    raise ProviderError(
                         f"{course['slug']}: no saved session and {EMAIL_ENV}/{PASSWORD_ENV} "
                         "unset. Run: python -m scrapers.cps_login --course "
                         f"{course['slug']} --headed"
                     )
                 print(f"  {course['slug']}: session expired, logging in...", file=sys.stderr)
                 if not login(page, base, email, password):
-                    raise RuntimeError(f"{course['slug']}: login failed (see cps_login.py --headed)")
+                    raise ProviderError("CPS login did not succeed; refresh the saved session or check credentials")
                 if persist_session:
                     pipeline.save_session(conn, course["id"], context.storage_state())
 

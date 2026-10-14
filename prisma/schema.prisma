@@ -1,0 +1,83 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Todo {
+  id        Int      @id @default(autoincrement())
+  title     String
+  createdAt DateTime @default(now())
+}
+
+/// A golf course we scrape tee times from. `platform` + `config` say how:
+/// each booking platform (cps / teesnap / chronogolf / golfrev / foreup) needs
+/// a different set of ids, kept as JSON so one row per course covers all of them.
+///   cps:        { }                                   (site is in bookingUrl)
+///   teesnap:    { courseId }
+///   chronogolf: { clubId, courseId, affiliationTypeId }
+///   golfrev:    { courseId, htc }
+///   foreup:     { courseId, bookingClass, scheduleId }
+model Course {
+  id             Int            @id @default(autoincrement())
+  slug           String         @unique
+  name           String
+  platform       String
+  bookingUrl     String
+  config         Json           @default("{}")
+  active         Boolean        @default(true)
+  createdAt      DateTime       @default(now())
+  teeTimes       TeeTime[]
+  session        CourseSession?
+  scrapeStatuses ScrapeStatus[]
+}
+
+/// A saved browser login session for a course whose booking platform needs
+/// authentication (currently only Lake Padden's Club Prophet site). `storageState`
+/// is a Playwright `context.storage_state()` blob; the scraper reuses it every run
+/// and overwrites it here whenever it has to log in again.
+model CourseSession {
+  courseId     Int      @id
+  course       Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  storageState Json
+  updatedAt    DateTime @updatedAt
+}
+
+/// Latest scrape attempt for a course-local date. Failures retain succeededAt
+/// and the previous tee times so the app can show when availability is stale.
+model ScrapeStatus {
+  courseId    Int
+  course      Course    @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  date        String // "2026-10-14" in America/Los_Angeles
+  attemptedAt DateTime
+  succeededAt DateTime?
+  error       String?
+
+  @@id([courseId, date])
+}
+
+/// One bookable tee time for one course. A successful scrape replaces the
+/// course/date's snapshot atomically; failures keep the last successful snapshot.
+model TeeTime {
+  id             Int      @id @default(autoincrement())
+  courseId       Int
+  course         Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  date           String // "2026-08-30" (course-local)
+  time           String // "14:30" 24h (course-local)
+  holes          Int      @default(18) // ponytail: ingestion coalesces unknown -> 18 so the unique key holds
+  price          Decimal? @db.Decimal(10, 2) // green fee per player (18h, or the slot's headline rate)
+  price9         Decimal? @db.Decimal(10, 2) // 9-hole rate when the platform lists it separately
+  cartFee        Decimal? @db.Decimal(10, 2)
+  availableSpots Int?
+  minPlayers     Int?
+  maxPlayers     Int?
+  rateName       String?
+  raw            Json? // original parsed row, for debugging platform quirks
+  scrapedAt      DateTime @default(now())
+
+  @@unique([courseId, date, time, holes])
+  @@index([date])
+}

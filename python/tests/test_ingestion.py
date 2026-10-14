@@ -150,6 +150,20 @@ class DailyResultsTests(unittest.TestCase):
         self.assertIn("request was not started", output.getvalue())
         self.assertNotIn("private-value", output.getvalue())
 
+    def test_cps_document_http_failure_is_visible_and_not_retried(self):
+        page = MagicMock()
+        page.goto.return_value.status = 403
+        with self.assertRaisesRegex(ProviderError, "document returned HTTP 403"):
+            cps._navigate(page, "https://example.invalid/search-teetime")
+        page.goto.assert_called_once()
+
+    def test_cps_challenge_page_is_detected_without_route_redirect(self):
+        page = MagicMock()
+        page.url = "https://example.invalid/search-teetime"
+        page.title.return_value = "Just a moment..."
+        with self.assertRaisesRegex(ProviderError, "refuses access"):
+            cps._check_access(page)
+
 
 class SnapshotTests(unittest.TestCase):
     def test_confirmed_empty_day_deletes_only_that_course_day_and_marks_success(self):
@@ -244,6 +258,7 @@ class IngestTests(unittest.TestCase):
              patch("scrapers.cps._read_days", return_value=ScrapeResult()):
             browser = playwright.return_value.__enter__.return_value.chromium.launch.return_value
             browser.new_context.return_value.new_page.return_value.url = course["bookingUrl"]
+            browser.new_context.return_value.new_page.return_value.goto.return_value.status = 200
             cps.scrape(course, DAY, 1, MagicMock(), persist_session=False)
         save.assert_not_called()
         browser = playwright.return_value.__enter__.return_value.chromium.launch.return_value

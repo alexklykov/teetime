@@ -39,7 +39,7 @@ jobs:
       - run: python -m pip install -r python/requirements.txt
       - name: Verify scraper behavior without network access
         run: python -m unittest discover -s python/tests -v
-      - uses: actions/cache@v4
+      - uses: actions/cache/restore@v4
         id: chromium
         with:
           path: ~/.cache/ms-playwright
@@ -50,6 +50,12 @@ jobs:
       - name: Install Chromium system libraries
         if: steps.chromium.outputs.cache-hit == 'true'
         run: python -m playwright install-deps chromium
+      - name: Cache Chromium before refreshing providers
+        if: steps.chromium.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: chromium-${{ runner.os }}-${{ hashFiles('python/requirements.txt') }}
       - name: Refresh tee times
         shell: bash
         run: |

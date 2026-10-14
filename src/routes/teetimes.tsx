@@ -243,14 +243,20 @@ function TeeTimes() {
   const days = Array.from({ length: 7 }, (_, index) => addDays(today, index))
 
   const toggleCourse = (slug: string) => {
-    const next = selected.includes(slug)
-      ? selected.filter((s) => s !== slug)
-      : [...selected, slug]
     void navigate({
-      search: (previous) => ({
-        ...previous,
-        courses: next.length === courses.length ? undefined : next.join(','),
-      }),
+      search: (previous) => {
+        const current = selectedCourses(
+          previous.courses,
+          courses.map((c) => c.slug),
+        )
+        const next = current.includes(slug)
+          ? current.filter((s) => s !== slug)
+          : [...current, slug]
+        return {
+          ...previous,
+          courses: next.length === courses.length ? undefined : next.join(','),
+        }
+      },
     })
   }
   const refresh = async () => {

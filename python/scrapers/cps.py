@@ -78,8 +78,24 @@ def _page_state(page):
 
 
 def _check_access(page):
-    if _page_state(page) == "provider access restriction":
+    if _page_state(page) == "provider access restriction" or _title_class(page) == "access challenge":
         raise ProviderError("CPS refuses access from this runner; a permitted provider integration is required")
+
+
+def _title_class(page):
+    title = page.title().lower()
+    if any(marker in title for marker in ("access denied", "forbidden", "just a moment", "verify you are human")):
+        return "access challenge"
+    if "club prophet" in title:
+        return "booking app"
+    return "other"
+
+
+def _navigate(page, url):
+    response = page.goto(url, wait_until="domcontentloaded")
+    if response is not None and response.status >= 400:
+        raise ProviderError(f"CPS booking document returned HTTP {response.status} from this runner")
+    _check_access(page)
 
 
 def login(page, base, email, password):
@@ -89,8 +105,7 @@ def login(page, base, email, password):
     rather than a button click sidesteps the page having both a nav "Sign In" and
     a form "SIGN IN" button. Run cps_login.py --headed if this ever breaks.
     """
-    page.goto(f"{base}/onlineresweb/login", wait_until="domcontentloaded")
-    _check_access(page)
+    _navigate(page, f"{base}/onlineresweb/login")
 
     page.fill('input[name="email"]', email)
     page.locator('input[name="email"]').press("Enter")
@@ -170,6 +185,8 @@ def _request_teetimes(page, action, timeout=15000):
         # Static labels only: never log URLs, request bodies, cookies or fields.
         stage = "response did not arrive" if requests else "request was not started"
         print(f"  CPS: tee-time API {stage} ({_page_state(page)})", file=sys.stderr)
+        print(f"  CPS: title={_title_class(page)}, external scripts={page.locator('script[src]').count()}",
+              file=sys.stderr)
         raise
     response = info.value
     if response.status != 200:
@@ -181,7 +198,7 @@ def _open_widget(page, widget):
     for attempt in range(2):
         try:
             _request_teetimes(
-                page, lambda: page.goto(widget, wait_until="domcontentloaded"), 30000
+                page, lambda: _navigate(page, widget), 30000
             )
             break
         except PWError:
@@ -262,8 +279,15 @@ def scrape(course, start, days, conn, headless=False, *, persist_session=True):
                 **({"storage_state": state} if state else {})
             )
             page = context.new_page()
+            page.on("pageerror", lambda _: print("  CPS: booking app JavaScript error", file=sys.stderr))
+            page.on("requestfailed", lambda request: print(
+                "  CPS: booking app script failed to load", file=sys.stderr
+            ) if request.resource_type == "script" else None)
+            page.on("response", lambda response: print(
+                f"  CPS: booking app script returned HTTP {response.status}", file=sys.stderr
+            ) if response.request.resource_type == "script" and response.status >= 400 else None)
             try:
-                page.goto(widget, wait_until="domcontentloaded")
+                _navigate(page, widget)
             except PWTimeoutError:
                 _check_access(page)
                 raise ProviderError("CPS booking page did not load") from None

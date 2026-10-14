@@ -2,6 +2,8 @@
 
 Compare available tee times at six courses around Bellingham, Washington. The TanStack Start app runs on Vercel, PostgreSQL stores the latest availability, and GitHub Actions runs Python/Playwright scrapers every 30 minutes. Booking links take you to each course's own website. Source: [alexklykov/teetime](https://github.com/alexklykov/teetime).
 
+Live app: [Fairway Finder](https://teetime-omega.vercel.app). Changes pushed to `main` deploy automatically. [Scraper runs and manual refresh](https://github.com/alexklykov/teetime/actions/workflows/scrape.yml) are available in GitHub Actions.
+
 ## Local setup
 
 Use Node.js 24, npm, Python 3.12, and a permanent Neon/PostgreSQL database. Copy `.env.example` to `.env.local` and fill in your own connection strings. An unclaimed Neon Launchpad database expires and should not be used for production. `package-lock.json` is the dependency lockfile; use `npm ci` for reproducible installs.
@@ -42,6 +44,8 @@ Linux requires a display for browser-based scraping; use `xvfb-run -a python pyt
 3. Push this repository to a public GitHub repository. In **Settings → Secrets and variables → Actions**, add `DATABASE_URL_UNPOOLED`, `LAKEPADDEN_EMAIL`, and `LAKEPADDEN_PASSWORD`. These values belong in secrets, never in committed files or workflow logs.
 4. Import the repository into your personal Vercel Hobby account. Set `DATABASE_URL` for Production, use `npm run build`, and let the checked-in Nitro configuration produce Vercel's output. Apply migrations separately before deploying schema-dependent application changes.
 5. In GitHub **Actions → scrape tee times → Run workflow**, start a run and verify its summary. Confirm that the deployed app shows successful refresh times for all six courses, then verify a scheduled run updates them again.
+
+The deployed website uses a separate PostgreSQL role with read access only to courses, availability, and refresh status. Keep the writer connection and saved booking sessions limited to the scraper; preview deployments do not receive the production database secret.
 
 The workflow is on the repository's default branch and requests runs at minutes 7 and 37 each hour. It processes today and the following six days in `America/Los_Angeles`, even when your computer is off. Vercel serves the app; it does not run the scraper.
 

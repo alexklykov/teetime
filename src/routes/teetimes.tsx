@@ -481,7 +481,7 @@ function TeeTimes() {
       )}
       <div className="island-shell overflow-hidden rounded-2xl">
         <div
-          className="overflow-x-auto"
+          className="relative overflow-x-auto"
           role="region"
           aria-label="Tee time comparison, scroll horizontally for more courses"
           tabIndex={0}

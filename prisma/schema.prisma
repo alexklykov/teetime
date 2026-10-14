@@ -59,6 +59,14 @@ model ScrapeStatus {
   @@id([courseId, date])
 }
 
+/// Singleton manual-refresh reservation, written only by claim_manual_refresh().
+/// A reservation lasts ten minutes even when dispatch fails or its result is unknown.
+/// The migration constrains id to 1 and gives teetime_web only SELECT + function EXECUTE.
+model RefreshControl {
+  id              Int      @id @default(1)
+  lastRequestedAt DateTime @db.Timestamp(3)
+}
+
 /// One bookable tee time for one course. A successful scrape replaces the
 /// course/date's snapshot atomically; failures keep the last successful snapshot.
 model TeeTime {

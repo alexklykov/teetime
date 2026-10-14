@@ -302,7 +302,7 @@ function TeeTimes() {
           onClick={refresh}
           className="min-h-11 font-semibold text-[var(--lagoon)] underline underline-offset-4 disabled:opacity-50"
         >
-          {refreshing ? 'Refreshing…' : 'Refresh listings'}
+          {refreshing ? 'Reloading…' : 'Reload saved listings'}
         </button>
         {refreshFailed && (
           <span role="alert">Refresh failed. Please try again.</span>

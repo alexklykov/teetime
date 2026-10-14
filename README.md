@@ -45,14 +45,28 @@ Linux requires a display for browser-based scraping; use `xvfb-run -a python pyt
 4. Import the repository into your personal Vercel Hobby account. Set `DATABASE_URL` for Production, use `npm run build`, and let the checked-in Nitro configuration produce Vercel's output. Apply migrations separately before deploying schema-dependent application changes.
 5. In GitHub **Actions → scrape tee times → Run workflow**, start a run and verify its summary. Confirm that the deployed app shows successful refresh times for all six courses, then verify a scheduled run updates them again.
 
-The deployed website uses a separate PostgreSQL role with read access only to courses, availability, and refresh status. Keep the writer connection and saved booking sessions limited to the scraper; preview deployments do not receive the production database secret.
+The deployed website uses a separate PostgreSQL role with read access to courses, availability, refresh status, and the manual-refresh cooldown. Its only write capability is executing the fixed `claim_manual_refresh()` function, which atomically reserves a ten-minute cooldown. It cannot write tee times or read booking sessions. Keep the writer connection and saved booking sessions limited to the scraper; preview deployments do not receive production secrets.
 
 The workflow is on the repository's default branch and requests runs at minutes 7 and 37 each hour. It processes today and the following six days in `America/Los_Angeles`, even when your computer is off. Vercel serves the app; it does not run the scraper.
+
+## Owner refresh controls
+
+The [owner page](https://teetime-omega.vercel.app/owner) starts the existing GitHub Actions job. Vercel handles authentication and dispatch; Neon stores a shared cooldown. This uses the same free services as scheduled runs. The public **Reload saved listings** button only reloads database results.
+
+1. Apply the `20261014020000_manual_refresh` migration before deploying the owner API. It grants the existing `teetime_web` role SELECT on `RefreshControl` and EXECUTE on `public.claim_manual_refresh()`. If you create the role later, add those two grants; do not grant direct writes.
+2. Set the Production Vercel secret `OWNER_ACCESS_KEY` to a cryptographically random value of at least 32 characters. Keep a copy in your password manager. It is the key used to sign in at `/owner`.
+3. Create a GitHub fine-grained personal access token owned by `alexklykov`, restricted to **Only select repositories → teetime**, with **Actions: Read and write**. No Contents or Workflows write permission is needed. Set the Production Vercel secret `GITHUB_ACTIONS_TOKEN` to that token, then redeploy. Renew it before its chosen expiry; an expired token stops manual controls, not scheduled jobs.
+4. Sign in and click **Check all courses now**. The page tracks the exact accepted run and polls while it is active. Refresh requests have a shared ten-minute cooldown and are refused while a recent job is queued or running. GitHub workflow concurrency also serializes scheduled and manual jobs.
+
+Owner sessions last eight hours in a Secure, HttpOnly, SameSite=Strict cookie. Rotating `OWNER_ACCESS_KEY` and redeploying invalidates existing sessions. Owner actions accept requests only from `https://teetime-omega.vercel.app` (or `http://localhost:3000` in development); update the fixed origin in `api.owner.ts` if changing the production domain. Secrets are server-only and must never use a `VITE_` prefix.
+
+A timed-out dispatch can still have started a job. The app keeps the cooldown, reports the uncertain result, and never automatically retries dispatch. Check the workflow list before retrying. A job may finish with errors even when some courses updated.
 
 ## Availability and operations
 
 - A successful course/day scrape atomically replaces that snapshot, including removing booked or disappeared slots. An empty successful result means no openings.
 - A failed scrape retains the prior snapshot and last successful refresh. The UI shows stale or failed refresh status; availability must be confirmed on the booking site.
+- Lake Padden, Sudden Valley, and Raspberry Ridge are included in every scheduled run, but their providers currently refuse the cloud runner's access. No API integration credentials are configured. Scheduling and owner refresh do not bypass those restrictions; successful updates require supported provider access.
 - Transient failures receive bounded retries. The job still checks other courses, then fails if any scrape failed. See the workflow's job summary and logs for the affected courses/dates.
 - Dates before today are pruned from availability and scrape status. Course login sessions stay in PostgreSQL and are reused across runners.
 - Enable GitHub Actions failure notifications in your GitHub notification settings and watch the repository. A job that never starts cannot emit a failure: check the Actions page if the website shows old refresh times.

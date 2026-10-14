@@ -20,7 +20,7 @@
     "db:seed": "dotenv -e .env.local -- prisma db seed",
     "typecheck": "tsc --noEmit",
     "db:deploy": "dotenv -e .env.local -- prisma migrate deploy",
-    "test": "tsx --test src/lib/tee-times.test.ts"
+    "test": "tsx --test src/lib/*.test.ts"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.4.2",

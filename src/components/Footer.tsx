@@ -1,3 +1,5 @@
+import { Link } from '@tanstack/react-router'
+
 export default function Footer() {
   const year = new Date().getFullYear()
 
@@ -19,7 +21,15 @@ export default function Footer() {
             </p>
           </div>
         </div>
-        <p className="m-0 text-sm">&copy; {year} Fairway Finder</p>
+        <div className="flex items-center gap-4 text-sm">
+          <Link
+            to="/owner"
+            className="min-h-11 py-3 underline underline-offset-4"
+          >
+            Owner
+          </Link>
+          <p className="m-0">&copy; {year} Fairway Finder</p>
+        </div>
       </div>
     </footer>
   )

@@ -10,11 +10,18 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as OwnerRouteImport } from './routes/owner'
 import { Route as TeetimesRouteImport } from './routes/teetimes'
+import { Route as ApiOwnerRouteImport } from './routes/api.owner'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const OwnerRoute = OwnerRouteImport.update({
+  id: '/owner',
+  path: '/owner',
   getParentRoute: () => rootRouteImport,
 } as any)
 const TeetimesRoute = TeetimesRouteImport.update({
@@ -22,31 +29,44 @@ const TeetimesRoute = TeetimesRouteImport.update({
   path: '/teetimes',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiOwnerRoute = ApiOwnerRouteImport.update({
+  id: '/api/owner',
+  path: '/api/owner',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/owner': typeof OwnerRoute
   '/teetimes': typeof TeetimesRoute
+  '/api/owner': typeof ApiOwnerRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/owner': typeof OwnerRoute
   '/teetimes': typeof TeetimesRoute
+  '/api/owner': typeof ApiOwnerRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/owner': typeof OwnerRoute
   '/teetimes': typeof TeetimesRoute
+  '/api/owner': typeof ApiOwnerRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/teetimes'
+  fullPaths: '/' | '/owner' | '/teetimes' | '/api/owner'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/teetimes'
-  id: '__root__' | '/' | '/teetimes'
+  to: '/' | '/owner' | '/teetimes' | '/api/owner'
+  id: '__root__' | '/' | '/owner' | '/teetimes' | '/api/owner'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  OwnerRoute: typeof OwnerRoute
   TeetimesRoute: typeof TeetimesRoute
+  ApiOwnerRoute: typeof ApiOwnerRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -58,6 +78,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/owner': {
+      id: '/owner'
+      path: '/owner'
+      fullPath: '/owner'
+      preLoaderRoute: typeof OwnerRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/teetimes': {
       id: '/teetimes'
       path: '/teetimes'
@@ -65,12 +92,21 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TeetimesRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/owner': {
+      id: '/api/owner'
+      path: '/api/owner'
+      fullPath: '/api/owner'
+      preLoaderRoute: typeof ApiOwnerRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  OwnerRoute: OwnerRoute,
   TeetimesRoute: TeetimesRoute,
+  ApiOwnerRoute: ApiOwnerRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

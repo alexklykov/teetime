@@ -262,7 +262,8 @@ function Owner() {
         Request a fresh check
       </h1>
       <p className="mb-6 text-sm text-[var(--sea-ink-soft)]">
-        These controls are for the site owner. A request checks all active
+        Manual refresh requires GitHub Actions to be enabled for the TeeTime
+        repository. A request from the site owner checks all active
         courses for today and the next six days. It can take several minutes,
         and a request cannot guarantee that every course will respond.
       </p>
@@ -400,8 +401,8 @@ function Owner() {
 
         {status && !status.configured && (
           <p className="mt-5 text-sm text-[var(--sea-ink-soft)]">
-            On-demand refresh is not configured yet. Scheduled checks and saved
-            listings remain available.
+            On-demand refresh is not configured yet. You can still view saved
+            listings.
           </p>
         )}
         <button
